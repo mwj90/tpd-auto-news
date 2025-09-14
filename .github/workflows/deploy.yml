@@ -39,9 +39,5 @@ jobs:
           FTP_PASS: ${{ secrets.FTP_PASS }}
           REMOTE_DIR: /home/u819292867/domains/thepolicydispatch.com/public_html/automated-news/
         run: |
-          lftp -u "$FTP_USER","$FTP_PASS" "$FTP_HOST" -e "
-            set ftp:ssl-allow no;
-            set ftp:passive-mode true;
-            mirror -R --delete --verbose --parallel=4 _site $REMOTE_DIR;
-            bye
-          "
+          printf "set ftp:ssl-allow no\nset ftp:passive-mode true\nmirror -R --delete --verbose --parallel=4 _site $REMOTE_DIR\nbye\n" > lftp.cmd
+          lftp -u "$FTP_USER","$FTP_PASS" "$FTP_HOST" -f lftp.cmd
