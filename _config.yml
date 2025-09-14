@@ -1,0 +1,13 @@
+title: "The Policy Dispatch – Automated News"
+description: "AI-assisted summaries you approve before publishing."
+baseurl: "/automated-news"
+url: "https://thepolicydispatch.com"
+
+markdown: kramdown
+theme: minima
+plugins:
+  - jekyll-feed
+
+permalink: /:year/:month/:day/:title/
+feed:
+  path: feed.xml
