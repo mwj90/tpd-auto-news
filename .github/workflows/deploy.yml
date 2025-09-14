@@ -2,8 +2,8 @@ name: Build & FTP Deploy
 
 on:
   push:
-    branches: [ "main" ]   # runs after you merge a PR or push to main
-  workflow_dispatch: {}     # lets you run it manually
+    branches: [ "main" ]
+  workflow_dispatch: {}
 
 jobs:
   build-and-deploy:
