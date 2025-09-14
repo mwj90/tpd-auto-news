@@ -29,12 +29,12 @@ jobs:
         run: bundle exec jekyll build --destination _site
 
       - name: Deploy via FTP
-        uses: SamKirkland/FTP-Deploy-Action@v4
-        with:
-          server: ${{ secrets.FTP_HOST }}
-          username: ${{ secrets.FTP_USER }}
-          password: ${{ secrets.FTP_PASS }}
-          protocol: ftp
-          port: 21
-          local-dir: _site/
-          server-dir: /home/u819292867/domains/thepolicydispatch.com/public_html/automated-news/
+  uses: SamKirkland/FTP-Deploy-Action@v4
+  with:
+    server: ${{ secrets.FTP_HOST }}
+    username: ${{ secrets.FTP_USER }}
+    password: ${{ secrets.FTP_PASS }}
+    protocol: ftp
+    port: 21
+    local-dir: _site/
+    server-dir: /home/u819292867/domains/thepolicydispatch.com/public_html/automated-news/
