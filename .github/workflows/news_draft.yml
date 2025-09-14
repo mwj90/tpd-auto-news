@@ -37,4 +37,3 @@ jobs:
           body: "Auto-generated summaries. Merge to publish."
           branch: "auto/posts-${{ github.run_id }}"
           delete-branch: true
-
