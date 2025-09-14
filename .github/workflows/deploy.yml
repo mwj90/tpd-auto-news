@@ -7,7 +7,10 @@ on:
 
 jobs:
   build-and-deploy:
+    # (Optional) if you create an environment, uncomment the next line
+    # environment: production
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -32,8 +35,8 @@ jobs:
       - name: Install lftp
         run: sudo apt-get update && sudo apt-get install -y lftp
 
-      # ---- Preflight: fail fast if a secret is missing ----
-      - name: Check secrets
+      # Preflight check (never prints secret values)
+      - name: Check secrets exist
         env:
           H: ${{ secrets.FTP_HOST }}
           U: ${{ secrets.FTP_USER }}
@@ -42,9 +45,9 @@ jobs:
           [ -n "$H" ] || { echo "FTP_HOST is empty"; exit 1; }
           [ -n "$U" ] || { echo "FTP_USER is empty"; exit 1; }
           [ -n "$P" ] || { echo "FTP_PASS is empty"; exit 1; }
-          echo "Secrets present ✔︎"
+          echo "Secrets present"
 
-      # ---- Upload with a single lftp command (no heredocs/quoting issues) ----
+      # Upload via lftp (no secret values echoed)
       - name: Upload via FTP (lftp mirror)
         env:
           FTP_HOST: ${{ secrets.FTP_HOST }}
@@ -52,4 +55,5 @@ jobs:
           FTP_PASS: ${{ secrets.FTP_PASS }}
           REMOTE_DIR: /home/u819292867/domains/thepolicydispatch.com/public_html/automated-news/
         run: |
-          lftp -p 21 -u "$FTP_USER","$FTP_PASS" "$FTP_HOST" -e "set ftp:ssl-allow false; set ftp:passive-mode true; mirror -R --delete --verbose --parallel=2 _site $REMOTE_DIR; bye"
+          lftp -p 21 -u "$FTP_USER","$FTP_PASS" "$FTP_HOST" \
+            -e "set ftp:ssl-allow false; set ftp:passive-mode true; mirror -R --delete --verbose --parallel=2 _site $REMOTE_DIR; bye"
