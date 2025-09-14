@@ -57,7 +57,7 @@ jobs:
           lftp -p 21 -u "$FTP_USER","$FTP_PASS" "$HOST" -e "
             set ftp:ssl-allow false;
             set ftp:passive-mode true;
-            set net:timeout 30;
+            set net:timeout 360;
             set net:max-retries 2;
             mirror -R --delete --verbose --parallel=2 _site $REMOTE_DIR;
             bye
