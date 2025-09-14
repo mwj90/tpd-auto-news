@@ -47,7 +47,6 @@ jobs:
           [ -n "$P" ] || { echo "FTP_PASS is empty"; exit 1; }
           echo "Secrets present"
 
-      # Upload via lftp (no secret values echoed)
       - name: Upload via FTP (lftp mirror)
         env:
           FTP_HOST: ${{ secrets.FTP_HOST }}
@@ -55,5 +54,8 @@ jobs:
           FTP_PASS: ${{ secrets.FTP_PASS }}
           REMOTE_DIR: /home/u819292867/domains/thepolicydispatch.com/public_html/automated-news/
         run: |
+          # Quick connectivity check (masked in logs, only exit code matters)
+          getent hosts "$FTP_HOST" >/dev/null 2>&1 || { echo "Host not resolvable"; exit 1; }
+
           lftp -p 21 -u "$FTP_USER","$FTP_PASS" "$FTP_HOST" \
-            -e "set ftp:ssl-allow false; set ftp:passive-mode true; mirror -R --delete --verbose --parallel=2 _site $REMOTE_DIR; bye"
+            -e "set ftp:ssl-allow false; set ftp:passive-mode true; set net:timeout 30; set net:max-retries 2; mirror -R --delete --verbose --parallel=2 _site $REMOTE_DIR; bye"
