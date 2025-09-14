@@ -1,0 +1,6 @@
+rss_url: "https://www.inoreader.com/stream/user/1006265339/tag/Google%20News%20Feeds/view/json?n=1000"
+max_items_per_run: 5
+min_length: 600
+author: "Waleed Jhumka"
+output_dir: "_posts"
+state_file: "state/seen.json"
