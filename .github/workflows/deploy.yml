@@ -47,19 +47,18 @@ jobs:
           [ -n "$P" ] || { echo "FTP_PASS is empty"; exit 1; }
           echo "Secrets present"
 
-      - name: Diagnose FTP connection (no upload yet)
+      - name: Upload via FTP (lftp mirror)
         env:
           FTP_USER: ${{ secrets.FTP_USER }}
           FTP_PASS: ${{ secrets.FTP_PASS }}
+          REMOTE_DIR: /public_html/automated-news/
         run: |
-          HOST="153.92.7.37"   # use raw IP to avoid DNS weirdness
-          # Try to connect, print server banner, and list directories
+          HOST="153.92.7.37"
           lftp -p 21 -u "$FTP_USER","$FTP_PASS" "$HOST" -e "
             set ftp:ssl-allow false;
             set ftp:passive-mode true;
             set net:timeout 30;
-            set cmd:trace true;
-            pwd;
-            cls -l;
+            set net:max-retries 2;
+            mirror -R --delete --verbose --parallel=2 _site $REMOTE_DIR;
             bye
           "
