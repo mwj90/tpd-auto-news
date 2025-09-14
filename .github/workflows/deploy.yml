@@ -2,8 +2,8 @@ name: Build & FTP Deploy
 
 on:
   push:
-    branches: [ "main" ]     # runs after you merge a PR or push to main
-  workflow_dispatch: {}       # you can also run it manually
+    branches: [ "main" ]
+  workflow_dispatch: {}
 
 jobs:
   build-and-deploy:
@@ -32,6 +32,19 @@ jobs:
       - name: Install lftp
         run: sudo apt-get update && sudo apt-get install -y lftp
 
+      # ---- Preflight: fail fast if a secret is missing ----
+      - name: Check secrets
+        env:
+          H: ${{ secrets.FTP_HOST }}
+          U: ${{ secrets.FTP_USER }}
+          P: ${{ secrets.FTP_PASS }}
+        run: |
+          [ -n "$H" ] || { echo "FTP_HOST is empty"; exit 1; }
+          [ -n "$U" ] || { echo "FTP_USER is empty"; exit 1; }
+          [ -n "$P" ] || { echo "FTP_PASS is empty"; exit 1; }
+          echo "Secrets present ✔︎"
+
+      # ---- Upload with a single lftp command (no heredocs/quoting issues) ----
       - name: Upload via FTP (lftp mirror)
         env:
           FTP_HOST: ${{ secrets.FTP_HOST }}
@@ -39,5 +52,4 @@ jobs:
           FTP_PASS: ${{ secrets.FTP_PASS }}
           REMOTE_DIR: /home/u819292867/domains/thepolicydispatch.com/public_html/automated-news/
         run: |
-          printf "set ftp:ssl-allow no\nset ftp:passive-mode true\nmirror -R --delete --verbose --parallel=4 _site $REMOTE_DIR\nbye\n" > lftp.cmd
-          lftp -u "$FTP_USER","$FTP_PASS" "$FTP_HOST" -f lftp.cmd
+          lftp -p 21 -u "$FTP_USER","$FTP_PASS" "$FTP_HOST" -e "set ftp:ssl-allow false; set ftp:passive-mode true; mirror -R --delete --verbose --parallel=2 _site $REMOTE_DIR; bye"
