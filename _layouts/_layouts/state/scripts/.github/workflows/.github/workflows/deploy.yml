@@ -1,0 +1,40 @@
+name: Build & FTP Deploy
+
+on:
+  push:
+    branches: [ "main" ]   # runs after you merge a PR
+  workflow_dispatch: {}     # you can also run it manually
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.2"
+          bundler-cache: true
+
+      - name: Install Jekyll deps
+        run: |
+          echo 'source "https://rubygems.org"' > Gemfile
+          echo 'gem "jekyll", "~> 4.3"' >> Gemfile
+          echo 'gem "minima", "~> 2.5"' >> Gemfile
+          echo 'gem "jekyll-feed", "~> 0.17"' >> Gemfile
+          bundle install --path vendor/bundle
+
+      - name: Build site
+        run: bundle exec jekyll build --destination _site
+
+      - name: Deploy via FTP
+        uses: SamKirkland/FTP-Deploy-Action@v4
+        with:
+          server: ${{ secrets.FTP_HOST }}
+          username: ${{ secrets.FTP_USER }}
+          password: ${{ secrets.FTP_PASS }}
+          protocol: ftp
+          port: 21
+          local-dir: _site/
+          server-dir: /home/u819292867/domains/thepolicydispatch.com/public_html/automated-news/
