@@ -39,7 +39,7 @@ jobs:
       - name: Sanity
         run: |
           set -e
-          test -f scripts/auto_news.py    || { echo "Missing scripts/auto_news.py"; exit 1; }
+          test -f config.yaml || (echo "Missing config.yaml" && exit 1)
           test -f scripts/config.yaml     || { echo "Missing scripts/config.yaml"; exit 1; }
           mkdir -p state drafts
           [ -f state/seen.json ] || echo "[]" > state/seen.json
