@@ -1,22 +1,24 @@
-# Inoreader JSON stream (your link)
-inoreader_json: "https://www.inoreader.com/stream/user/1006265339/tag/Google%20News%20Feeds/view/json?n=1000"
+inoreader_json_url: "https://www.inoreader.com/stream/user/1006265339/tag/Google%20News%20Feeds/view/json?n=1000"
 
-# lookback window, hours
-hours_window: 48
+# Selection window
+window_hours: 6
+max_items: 6
+min_score: 0.20           # lower = less strict (0..1)
 
-# max articles to draft per run
-max_articles: 1
-
-# min quality heuristics (title length etc.)
-min_title_len: 10
-
-# site defaults
-site_url: "https://thepolicydispatch.com/automated-news/"
-author: "The Policy Dispatch"
-
-# writing target
+# Article-making
 target_words: 300
+tone: "neutral, concise, policy-focused"
+add_source_link: true
 
-# category/tags (optional)
-category: "automated"
-tags: ["ai", "news", "brief"]
+# Output
+section_slug: "automated-news"
+posts_dir: "_posts"
+drafts_dir: "drafts"
+
+# Filters (optional)
+include_keywords: []
+exclude_keywords: ["sports betting", "celebrity gossip"]
+
+# Networking/timeouts
+max_web_fetches_per_item: 2
+timeout_seconds: 20
