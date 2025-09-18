@@ -1,10 +1,9 @@
-hours: 6          # lookback window
-max_posts: 3
+hours: 6          # look back window
+max_posts: 3      # how many drafts to create per run
 dry: false        # set true to test without writing files
 
-rss:
-  # point this to your Inoreader public RSS/Atom feed or any feed
-  url: https://example.com/your-inoreader-public-feed.xml
+inoreader_json_url: "https://www.inoreader.com/stream/user/1006265339/tag/Google%20News%20Feeds/view/json?n=1000"
+
 
 output:
   draft_dir: drafts
