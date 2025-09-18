@@ -1,4 +1,4 @@
-<<<<<<< HEAD
+
 name: Draft Automated Posts
 
 on:
@@ -90,6 +90,3 @@ jobs:
           add-paths: |
             drafts/**
             state/seen.json
-=======
-# (paste the YAML from above here)
->>>>>>> d3aa195 (chore: point workflow to scripts/, add PR step)
