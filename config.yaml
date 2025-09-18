@@ -1,0 +1,25 @@
+hours: 6          # lookback window
+max_posts: 3
+dry: false        # set true to test without writing files
+
+rss:
+  # point this to your Inoreader public RSS/Atom feed or any feed
+  url: https://example.com/your-inoreader-public-feed.xml
+
+output:
+  draft_dir: drafts
+  posts_dir: _posts
+  state_file: state/seen.json
+
+site:
+  baseurl: /automated-news
+  layout: post
+  author: "Automated News"
+  categories: ["Automated"]
+  tags: []
+
+summarizer:
+  method: rake           # uses rake-nltk (no paid API)
+  target_words: 300
+  min_words: 250
+  max_words: 350
