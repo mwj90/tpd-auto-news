@@ -240,3 +240,14 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+from pathlib import Path, PurePath
+ROOT = Path(__file__).resolve().parents[1]
+candidates = [ROOT / "config.yaml", ROOT / "scripts" / "config.yaml"]
+for p in candidates:
+    if p.exists():
+        cfg_path = p
+        break
+else:
+    raise FileNotFoundError("config.yaml not found in repo root or scripts/")
+
