@@ -1,0 +1,13 @@
+inoreader_json: "https://www.inoreader.com/stream/user/1006265339/tag/Google%20News%20Feeds/view/json?n=1000"
+
+# trial settings – easy to produce one draft now
+hours_window: 48
+max_articles: 1
+min_title_len: 10
+target_words: 300
+
+# site defaults
+site_url: "https://thepolicydispatch.com/automated-news/"
+author: "The Policy Dispatch"
+category: "automated"
+tags: ["ai", "news", "brief"]
