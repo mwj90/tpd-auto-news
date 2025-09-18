@@ -1,8 +1,12 @@
-
-PyYAML>=6.0
-python-dateutil==2.9.0.post0
-feedparser>=6,<7
-requests>=2.31
-beautifulsoup4>=4.12
-lxml>=4.9
-trafilatura>=1.6
+- name: Install deps
+  run: |
+    python -m pip install --upgrade pip
+    pip install \
+      PyYAML \
+      python-dateutil \
+      feedparser \
+      requests \
+      beautifulsoup4 \
+      lxml \
+      trafilatura \
+      readability-lxml
