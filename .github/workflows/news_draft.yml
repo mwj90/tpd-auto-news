@@ -26,7 +26,11 @@ jobs:
       - name: Install deps
         run: |
           python -m pip install --upgrade pip
-          pip install requests feedparser pyyaml markdownify sumy readability-lxml beautifulsoup4 lxml
+          pip install requests PyYAML feedparser python-dateutil
+          pip install beautifulsoup4 lxml markdownify
+          pip install trafilatura readability-lxml
+          pip install sumy rake-nltk nltk
+
 
       - name: Sanity
         run: |
