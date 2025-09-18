@@ -1,2 +1,22 @@
-inoreader_json: https://www.inoreader.com/stream/user/1006265339/tag/Google%20News%20Feeds/view/json?n=1000
-max_posts: 5
+# Inoreader JSON stream (your link)
+inoreader_json: "https://www.inoreader.com/stream/user/1006265339/tag/Google%20News%20Feeds/view/json?n=1000"
+
+# lookback window, hours
+hours_window: 6
+
+# max articles to draft per run
+max_articles: 3
+
+# min quality heuristics (title length etc.)
+min_title_len: 40
+
+# site defaults
+site_url: "https://thepolicydispatch.com/automated-news/"
+author: "The Policy Dispatch"
+
+# writing target
+target_words: 300
+
+# category/tags (optional)
+category: "automated"
+tags: ["ai", "news", "brief"]
