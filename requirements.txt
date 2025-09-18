@@ -8,3 +8,4 @@ trafilatura
 readability-lxml
 markdownify
 rake-nltk
+sumy
