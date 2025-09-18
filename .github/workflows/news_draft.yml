@@ -2,7 +2,7 @@ name: Draft Automated Posts
 
 on:
   schedule:
-    - cron: "0 */6 * * *"   # every 6 hours
+    - cron: "*/60 * * * *"     # every 60 minutes (change as you like)
   workflow_dispatch: {}
 
 jobs:
@@ -18,36 +18,32 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Setup Python
+      - name: Setup Python 3.11
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      - name: Install Python deps
+      - name: Install deps
         run: |
           python -m pip install --upgrade pip
-          pip install requests feedparser pyyaml markdownify sumy
+          pip install requests feedparser pyyaml markdownify sumy readability-lxml beautifulsoup4 lxml
 
-      - name: Show config + sanity checks
+      - name: Sanity
         run: |
-          echo "Repo files:"
-          ls -la
-          echo "------"
           test -f config.yaml || (echo "Missing config.yaml" && exit 1)
-          test -f scripts/fetch_and_write.py || (echo "Missing scripts/fetch_and_write.py" && exit 1)
-          test -f state/seen.json || (echo "Missing state/seen.json" && exit 1)
-          echo "config.yaml:"
-          cat config.yaml || true
-          echo "------"
+          test -f scripts/auto_news.py || (echo "Missing scripts/auto_news.py" && exit 1)
+          mkdir -p _posts drafts state && [ -f state/seen.json ] || echo "[]" > state/seen.json
+          echo "Config:" && cat config.yaml
 
-      - name: Generate posts
-        run: python scripts/fetch_and_write.py
+      - name: Generate draft posts
+        run: python scripts/auto_news.py
 
       - name: Create PR if changes
         uses: peter-evans/create-pull-request@v6
         with:
-          commit-message: "Auto: new posts"
-          title: "Draft posts for approval"
-          body: "Auto-generated summaries. Merge to publish."
-          branch: "auto/posts-${{ github.run_id }}"
+          commit-message: "Auto: draft news articles"
+          title: "Draft Automated Posts for approval"
+          body: "These ~300-word articles were generated from Inoreader items in the last window. Review & merge to publish."
+          branch: "auto/news-${{ github.run_id }}"
+          labels: draft, automated
           delete-branch: true
