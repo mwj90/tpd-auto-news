@@ -30,7 +30,7 @@ jobs:
       MAX_POSTS: ${{ inputs.max_posts }}
       DRY: ${{ inputs.dry_run }}
     steps:
-       - name: Download NLTK data
+      - name: Download NLTK data
         run: |
           python -m nltk.downloader punkt punkt_tab stopwords
       - name: Checkout
