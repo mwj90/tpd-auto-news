@@ -7,10 +7,15 @@ from datetime import datetime, timezone
 import requests
 from bs4 import BeautifulSoup
 from datetime import datetime, timedelta, timezone
-from zoneinfo import ZoneInfo  # stdlib on Py3.11 used in Actions
+from zoneinfo import ZoneInfo
+from dateutil.parser import parse as dtparse
+
 
 
 LOCAL_TZ = ZoneInfo("Asia/Dubai")  # UTC+4
+PUBLISH_NOW = os.getenv("PUBLISH_NOW", "false").lower() == "true"
+OUTPUT_DIR = "_posts" if PUBLISH_NOW else "drafts"
+
 
 
 # -------- CONFIG (env or defaults) ----------
@@ -189,3 +194,75 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+def parse_item_dt(it: dict):
+    """
+    Try common fields from Inoreader/feeds and return UTC-aware datetime or None.
+    """
+    for k in ("date_published", "published", "updated"):
+        v = it.get(k)
+        if v:
+            try:
+                return dtparse(v).astimezone(timezone.utc)
+            except Exception:
+                pass
+    pp = it.get("published_parsed")
+    if pp:
+        try:
+            return datetime(pp[0], pp[1], pp[2], pp[3], pp[4], pp[5], tzinfo=timezone.utc)
+        except Exception:
+            pass
+    return None
+
+
+def pretty_reason(keep: bool, title: str, reason: str):
+    print(f"[{'KEEP' if keep else 'DROP'}] {title[:120]} — {reason}")
+
+# HOURS from env (already read elsewhere)
+cutoff_utc = datetime.now(timezone.utc) - timedelta(hours=HOURS)
+print(f"Cutoff (UTC): {cutoff_utc.isoformat()}  |  TZ for stamps: {LOCAL_TZ}")
+
+kept = []
+for i, item in enumerate(feed['items'] if isinstance(feed, dict) and 'items' in feed else feed.entries):
+    title = item.get("title") or item.get("summary") or "(no title)"
+    pub_utc = parse_item_dt(item)
+    if not pub_utc:
+        pretty_reason(False, title, "no parseable date")
+        continue
+
+    if pub_utc < cutoff_utc:
+        pretty_reason(False, title, f"too old: {pub_utc.isoformat()}")
+        continue
+
+    # Optional signal/quality gates — loosen while testing
+    content = (item.get("content_html") or item.get("content") or item.get("summary") or "")
+    text = re.sub(r"<[^>]+>", " ", content)    # strip HTML tags roughly
+    words = len(re.findall(r"\w+", text))
+    if words < 30:  # be gentle during test
+        pretty_reason(False, title, f"too short ({words} words)")
+        continue
+
+    pretty_reason(True, title, f"pub {pub_utc.isoformat()} / words={words}")
+    kept.append((item, pub_utc, text))
+
+print(f"Candidates kept: {len(kept)}")
+
+now_local = datetime.now(LOCAL_TZ)
+date_str = now_local.strftime("%Y-%m-%d %H:%M:%S %z")
+
+# Example FM lines; adapt to your structure
+lines = []
+lines.append("---")
+lines.append(f'title: "{title.replace("\"","\'")}"')
+lines.append(f'date: "{date_str}"')  # ✅ stamped in +0400
+# … any other fields …
+lines.append("---")
+lines.append("")  # blank line before body
+lines.append(body_text)
+
+os.makedirs(OUTPUT_DIR, exist_ok=True)
+# filename creation …
+with open(os.path.join(OUTPUT_DIR, filename), "w", encoding="utf-8") as f:
+    f.write("\n".join(lines))
+
