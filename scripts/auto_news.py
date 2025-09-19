@@ -13,6 +13,7 @@ from rake_nltk import Rake
 import nltk
 # Ensure required datasets are available
 nltk.download("punkt")
+nltk.download("punkt_tab")
 nltk.download("stopwords")
 nltk.download("punkt", quiet=True)
 
