@@ -251,3 +251,8 @@ for p in candidates:
 else:
     raise FileNotFoundError("config.yaml not found in repo root or scripts/")
 
+print("DEBUG: Number of articles fetched =", len(feed.entries))
+for entry in feed.entries[:5]:
+    print("DEBUG: Article title =", entry.get("title"))
+
+
