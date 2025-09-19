@@ -3,45 +3,63 @@ name: Draft Automated Posts
 on:
   workflow_dispatch:
 
+permissions:
+  contents: write
+  pull-requests: write
+
 jobs:
   draft:
     runs-on: ubuntu-latest
+    env:
+      PYTHONUNBUFFERED: "1"
+      HOURS: "6"
+      MAX_POSTS: "3"
+      DRY: "false"
+      TZ: Etc/GMT-4
+      INOREADER_JSON_URL: ${{ vars.INOREADER_JSON_URL }}
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-      - name: Setup Python 3.11
+      - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
-
-      - name: Sanity
-        run: |
-          set -e
-          test -f scripts/auto_news.py || (echo "Missing scripts/auto_news.py" && exit 1)
-          test -f scripts/config.yaml || (echo "Missing scripts/config.yaml" && exit 1)
-          mkdir -p drafts
-          echo "{}" > state/seen.json || true
+          python-version: "3.11"
 
       - name: Install deps
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Download NLTK data
+      - name: Ensure NLTK data
         run: |
-          python -m nltk.downloader punkt punkt_tab stopwords
+          python - <<'PY'
+          import nltk
+          for pkg in ("punkt","punkt_tab","stopwords"):
+              try:
+                  nltk.data.find({"punkt":"tokenizers/punkt",
+                                  "punkt_tab":"tokenizers/punkt_tab/english",
+                                  "stopwords":"corpora/stopwords"}[pkg])
+              except LookupError:
+                  nltk.download(pkg, quiet=True)
+          print("NLTK data ready.")
+          PY
 
       - name: Generate draft posts
-        run: |
-          python scripts/auto_news.py
+        run: python scripts/auto_news.py
 
       - name: Create PR if changes
         uses: peter-evans/create-pull-request@v6
         with:
-          commit-message: "Automated news drafts"
+          commit-message: chore: add automated news drafts
+          title: Automated drafts – ${{ github.run_id }}
+          body: |
+            Hours: 6
+            Max posts: 3
+            Dry run: false
           branch: bot/auto-drafts
-          title: "Automated Drafts"
-          body: "This PR contains automated news drafts."
-          base: main
+          delete-branch: true
+          add-paths: |
+            drafts/**
+            state/seen.json
