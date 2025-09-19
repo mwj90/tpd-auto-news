@@ -56,7 +56,9 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-
+      - name: Download NLTK dats
+        run: |
+          python -m nltk.downloader punkt punkt_tab stopwords
 
       - name: Generate draft posts
         run: |
