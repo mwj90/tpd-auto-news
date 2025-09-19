@@ -6,6 +6,12 @@ from pathlib import Path
 from datetime import datetime, timezone
 import requests
 from bs4 import BeautifulSoup
+from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo  # stdlib on Py3.11 used in Actions
+
+
+LOCAL_TZ = ZoneInfo("Asia/Dubai")  # UTC+4
+
 
 # -------- CONFIG (env or defaults) ----------
 ROOT = Path(__file__).resolve().parents[1]  # repo root
