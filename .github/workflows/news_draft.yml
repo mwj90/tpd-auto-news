@@ -24,6 +24,11 @@ permissions:
 
 env:
   PYTHONUNBUFFERED: "1"
+  HOURS: 6
+  MAX_POSTS: 3
+  DRY: "false"
+  TZ: Etc/GMT-4
+
 
 jobs:
   draft:
