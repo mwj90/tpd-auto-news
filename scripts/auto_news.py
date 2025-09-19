@@ -255,4 +255,14 @@ print("DEBUG: Number of articles fetched =", len(feed.entries))
 for entry in feed.entries[:5]:
     print("DEBUG: Article title =", entry.get("title"))
 
+if not feed.entries:
+    print("No articles found. Writing test draft...")
+    with open("drafts/test.md", "w") as f:
+        f.write("---\n")
+        f.write("title: Test Draft\n")
+        f.write("date: 2025-09-19\n")
+        f.write("---\n")
+        f.write("This is a placeholder article.\n")
+
+
 
