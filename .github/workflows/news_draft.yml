@@ -1,17 +1,32 @@
 name: Draft Automated Posts
 
 on:
+  # Manual run with options
   workflow_dispatch:
     inputs:
       hours:
         description: "Look back this many hours"
+        required: false
         default: "6"
       max_posts:
         description: "Max posts to generate"
+        required: false
         default: "3"
       publish_now:
         description: "Publish directly to site (true/false)"
+        required: false
         default: "false"
+  # Optional: uncomment to run every 3 hours automatically
+  # schedule:
+  #   - cron: "0 */3 * * *"
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: news-drafts-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   draft:
@@ -21,15 +36,16 @@ jobs:
       HOURS: ${{ inputs.hours || '6' }}
       MAX_POSTS: ${{ inputs.max_posts || '3' }}
       DRY: "false"
-      TZ: Etc/GMT-4               # you said GMT+4
+      TZ: Etc/GMT-4                      # your timezone is GMT+4
       PUBLISH_NOW: ${{ inputs.publish_now || 'false' }}
       INOREADER_JSON_URL: "https://www.inoreader.com/stream/user/1006265339/tag/Google%20News%20Feeds/view/json?n=1000"
       DEBUG: "true"
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repo
+        uses: actions/checkout@v4
 
-      - name: Sanity
+      - name: Sanity & prep
         run: |
           set -e
           test -f config.yaml              || { echo "Missing config.yaml" && exit 1; }
@@ -37,11 +53,13 @@ jobs:
           mkdir -p state drafts _posts/automated-news
           [[ -f state/seen.json ]] || echo "[]" > state/seen.json
 
-      - uses: actions/setup-python@v5
+      - name: Setup Python
+        uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+          cache: "pip"
 
-      - name: Install deps
+      - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
@@ -52,28 +70,30 @@ jobs:
           import nltk
           for pkg in ["punkt","punkt_tab","stopwords"]:
               try:
-                  nltk.data.find({"punkt":"tokenizers/punkt",
-                                   "punkt_tab":"tokenizers/punkt_tab/english",
-                                   "stopwords":"corpora/stopwords"}[pkg])
+                  nltk.data.find({
+                      "punkt": "tokenizers/punkt",
+                      "punkt_tab": "tokenizers/punkt_tab/english",
+                      "stopwords": "corpora/stopwords"
+                  }[pkg])
               except LookupError:
                   nltk.download(pkg, quiet=True)
           print("NLTK data ready.")
           PY
 
-      - name: Generate draft posts
+      - name: Generate posts
         run: |
           set -e
           echo "Generating drafts (max $MAX_POSTS)…"
           python scripts/auto_news.py
 
-      # IMPORTANT: include _posts/** as well, so publish mode is captured
-      - name: Create PR if changes
+      - name: Create PR with changes
         uses: peter-evans/create-pull-request@v6
         with:
           commit-message: chore: add automated news drafts
           title: Automated drafts – $(date -u +'%Y-%m-%d %H:%M UTC')
           body: |
             This PR contains newly generated posts and updated state.
+
             - Hours: `${{ env.HOURS }}`
             - Max posts: `${{ env.MAX_POSTS }}`
             - Publish now: `${{ env.PUBLISH_NOW }}`
