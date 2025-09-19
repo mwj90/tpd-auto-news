@@ -11,6 +11,9 @@ from dateutil import parser as dtparse
 from markdownify import markdownify as md
 from rake_nltk import Rake
 import nltk
+# Ensure required datasets are available
+nltk.download("punkt")
+nltk.download("stopwords")
 nltk.download("punkt", quiet=True)
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
