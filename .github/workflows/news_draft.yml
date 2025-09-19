@@ -1,38 +1,35 @@
-
 name: Draft Automated Posts
 
 on:
   workflow_dispatch:
     inputs:
       hours:
-        description: "Look back window in hours"
+        description: "How many past hours to consider"
+        required: false
         default: "6"
-        required: true
       max_posts:
-        description: "Max posts to draft"
+        description: "Maximum number of drafts to create"
+        required: false
         default: "3"
-        required: true
       dry_run:
-        description: "Dry run (no PR)"
-        type: boolean
-        default: false
+        description: "Run without creating drafts (log only)"
+        required: false
+        default: "false"
+        type: choice
+        options: ["false", "true"]
 
 permissions:
-  contents: write
-  pull-requests: write
+  contents: write          # needed to push a branch
+  pull-requests: write     # needed to open/update the PR
 
+env:
+  PYTHONUNBUFFERED: "1"
 
 jobs:
   draft:
     runs-on: ubuntu-latest
-    env:
-      HOURS: ${{ inputs.hours }}
-      MAX_POSTS: ${{ inputs.max_posts }}
-      DRY: ${{ inputs.dry_run }}
+
     steps:
-      - name: Download NLTK data
-        run: |
-          python -m nltk.downloader punkt punkt_tab stopwords
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -42,57 +39,67 @@ jobs:
           python-version: "3.11"
 
       - name: Sanity
+        shell: bash
         run: |
           set -e
-          test -f config.yaml || test -f scripts/config.yaml || { echo "Missing config.yaml"; exit 1; }
-          mkdir -p state drafts
-          [ -f state/seen.json ] || echo "[]" > state/seen.json
-          echo "Found:"
-          ls -la scripts
+          # Verify expected files exist
+          test -f config.yaml              || { echo "Missing config.yaml" && exit 1; }
+          test -f scripts/auto_news.py     || { echo "Missing scripts/auto_news.py" && exit 1; }
 
+          # Prepare folders/files used by the script
+          mkdir -p state drafts
+          [[ -f state/seen.json ]] || echo "[]" > state/seen.json
+
+          # Export inputs as env for later steps
+          echo "HOURS=${{ github.event.inputs.hours || '6' }}"       >> $GITHUB_ENV
+          echo "MAX_POSTS=${{ github.event.inputs.max_posts || '3' }}" >> $GITHUB_ENV
+          echo "DRY=${{ github.event.inputs.dry_run || 'false' }}"     >> $GITHUB_ENV
 
       - name: Install deps
+        shell: bash
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Download NLTK dats
+      - name: Download NLTK data
+        shell: bash
         run: |
-          python -m nltk.downloader punkt punkt_tab stopwords
+          python - <<'PY'
+          import nltk
+          # Ensure required packages are present (quiet, non-interactive)
+          for pkg in ["punkt", "punkt_tab", "stopwords"]:
+              try:
+                  nltk.data.find(
+                      {"punkt":"tokenizers/punkt",
+                       "punkt_tab":"tokenizers/punkt_tab/english",
+                       "stopwords":"corpora/stopwords"}[pkg]
+                  )
+              except LookupError:
+                  nltk.download(pkg, quiet=True)
+          print("NLTK data ready.")
+          PY
 
       - name: Generate draft posts
+        shell: bash
         run: |
           set -e
           echo "Generating drafts for last ${HOURS}h (max ${MAX_POSTS})"
-          if [ "${DRY}" = "true" ]; then
-            python -u scripts/auto_news.py \
-              --config scripts/config.yaml \
-              --hours "${HOURS}" \
-              --max-posts "${MAX_POSTS}" \
-              --out drafts \
-              --state state/seen.json \
-              --dry-run
+          if [[ "${DRY}" == "true" ]]; then
+            python scripts/auto_news.py --hours "${HOURS}" --max-posts "${MAX_POSTS}" --dry-run
           else
-            python -u scripts/auto_news.py \
-              --config scripts/config.yaml \
-              --hours "${HOURS}" \
-              --max-posts "${MAX_POSTS}" \
-              --out drafts \
-              --state state/seen.json
+            python scripts/auto_news.py --hours "${HOURS}" --max-posts "${MAX_POSTS}"
           fi
-          echo "Drafts directory:"
-          ls -la drafts || true
 
       - name: Create PR if changes
-        if: ${{ inputs.dry_run == false }}
         uses: peter-evans/create-pull-request@v6
         with:
           commit-message: "chore: add automated news drafts"
-          title: "Automated news drafts"
+          title: "Automated drafts – $(date -u +'%Y-%m-%d %H:%M UTC')"
           body: |
-            This PR contains newly generated drafts for review/approval.
-            - Window: **${{ inputs.hours }}h**
-            - Max posts: **${{ inputs.max_posts }}**
+            This PR contains newly generated draft posts and updated state.
+            - Hours: `${{ env.HOURS }}`
+            - Max posts: `${{ env.MAX_POSTS }}`
+            - Dry run: `${{ env.DRY }}`
           branch: bot/auto-drafts
           delete-branch: true
           add-paths: |
