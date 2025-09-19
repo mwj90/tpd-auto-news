@@ -1,105 +1,135 @@
 name: Draft Automated Posts
 
 on:
-  # Manual run with options
+  # Manual trigger with knobs
   workflow_dispatch:
     inputs:
-      hours:
-        description: "Look back this many hours"
-        required: false
-        default: "6"
-      max_posts:
-        description: "Max posts to generate"
-        required: false
-        default: "3"
       publish_now:
-        description: "Publish directly to site (true/false)"
-        required: false
-        default: "false"
-  # Optional: uncomment to run every 3 hours automatically
+        description: "Write directly to _posts/automated-news instead of drafts/"
+        type: boolean
+        default: false
+      hours:
+        description: "Look-back window in hours"
+        type: number
+        default: 6
+      max_posts:
+        description: "Maximum posts to create"
+        type: number
+        default: 3
+      dry:
+        description: "Dry run (fetch + filter only, don't write files)"
+        type: boolean
+        default: false
+      debug:
+        description: "Verbose debug logging"
+        type: boolean
+        default: true
+      tz:
+        description: "Timezone (IANA). Your GMT+4 is Etc/GMT-4"
+        type: choice
+        options: [UTC, Etc/GMT-4, Asia/Dubai, Asia/Baku, Asia/Tbilisi]
+        default: Etc/GMT-4
+      inoreader_json_url:
+        description: "JSON feed URL from Inoreader"
+        type: string
+        default: "https://www.inoreader.com/stream/user/1006265339/tag/Google%20News%20Feeds/view/json?n=1000"
+
+  # Uncomment to run on a schedule (UTC times)
   # schedule:
-  #   - cron: "0 */3 * * *"
+  #   - cron: "0 */3 * * *"   # every 3 hours
 
 permissions:
   contents: write
   pull-requests: write
 
-concurrency:
-  group: news-drafts-${{ github.ref }}
-  cancel-in-progress: false
+env:
+  PYTHONUNBUFFERED: "1"
 
 jobs:
   draft:
-    runs-on: ubuntu-24.04
+    name: draft
+    runs-on: ubuntu-latest
+
     env:
-      PYTHONUNBUFFERED: 1
-      HOURS: ${{ inputs.hours || '6' }}
-      MAX_POSTS: ${{ inputs.max_posts || '3' }}
-      DRY: "false"
-      TZ: Etc/GMT-4                      # your timezone is GMT+4
-      PUBLISH_NOW: ${{ inputs.publish_now || 'false' }}
-      INOREADER_JSON_URL: "https://www.inoreader.com/stream/user/1006265339/tag/Google%20News%20Feeds/view/json?n=1000"
-      DEBUG: "true"
+      HOURS: ${{ inputs.hours || 6 }}
+      MAX_POSTS: ${{ inputs.max_posts || 3 }}
+      DRY: ${{ inputs.dry && 'true' || 'false' }}
+      DEBUG: ${{ inputs.debug && 'true' || 'false' }}
+      PUBLISH_NOW: ${{ inputs.publish_now && 'true' || 'false' }}
+      INOREADER_JSON_URL: ${{ inputs.inoreader_json_url }}
+      TZ: ${{ inputs.tz || 'Etc/GMT-4' }}
 
     steps:
-      - name: Checkout repo
+      - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
 
-      - name: Sanity & prep
-        run: |
-          set -e
-          test -f config.yaml              || { echo "Missing config.yaml" && exit 1; }
-          test -f scripts/auto_news.py     || { echo "Missing scripts/auto_news.py" && exit 1; }
-          mkdir -p state drafts _posts/automated-news
-          [[ -f state/seen.json ]] || echo "[]" > state/seen.json
-
-      - name: Setup Python
+      - name: Setup Python 3.11
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-          cache: "pip"
 
-      - name: Install dependencies
+      - name: Sanity
+        run: |
+          test -f config.yaml              || { echo "Missing config.yaml" && exit 1; }
+          test -f scripts/auto_news.py     || { echo "Missing scripts/auto_news.py" && exit 1; }
+
+      - name: Install deps
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Download NLTK data (quiet)
+      - name: Download NLTK data (punkt, punkt_tab, stopwords)
         run: |
           python - <<'PY'
           import nltk
-          for pkg in ["punkt","punkt_tab","stopwords"]:
+          for pkg, path in {
+              "punkt": "tokenizers/punkt",
+              "punkt_tab": "tokenizers/punkt_tab/english",
+              "stopwords": "corpora/stopwords"
+          }.items():
               try:
-                  nltk.data.find({
-                      "punkt": "tokenizers/punkt",
-                      "punkt_tab": "tokenizers/punkt_tab/english",
-                      "stopwords": "corpora/stopwords"
-                  }[pkg])
+                  nltk.data.find(path)
               except LookupError:
                   nltk.download(pkg, quiet=True)
           print("NLTK data ready.")
           PY
 
-      - name: Generate posts
+      - name: Prepare folders
         run: |
-          set -e
+          mkdir -p state drafts _posts/automated-news
+          [[ -f state/seen.json ]] || echo "[]" > state/seen.json
+
+      - name: Generate draft posts
+        env:
+          INOREADER_JSON_URL: ${{ env.INOREADER_JSON_URL }}
+          DEBUG: ${{ env.DEBUG }}
+          HOURS: ${{ env.HOURS }}
+          MAX_POSTS: ${{ env.MAX_POSTS }}
+          DRY: ${{ env.DRY }}
+          PUBLISH_NOW: ${{ env.PUBLISH_NOW }}
+        run: |
           echo "Generating drafts (max $MAX_POSTS)…"
           python scripts/auto_news.py
 
-      - name: Create PR with changes
+      - name: Create PR if changes
         uses: peter-evans/create-pull-request@v6
         with:
-          commit-message: chore: add automated news drafts
-          title: Automated drafts – $(date -u +'%Y-%m-%d %H:%M UTC')
-          body: |
-            This PR contains newly generated posts and updated state.
-
-            - Hours: `${{ env.HOURS }}`
-            - Max posts: `${{ env.MAX_POSTS }}`
-            - Publish now: `${{ env.PUBLISH_NOW }}`
           branch: bot/auto-drafts
           delete-branch: true
           add-paths: |
             drafts/**
-            _posts/**
+            _posts/automated-news/**
             state/seen.json
+          commit-message: chore: add automated news drafts
+          title: "Automated drafts – $(date -u +'%Y-%m-%d %H:%M UTC')"
+          body: |
+            This PR contains newly generated posts/state.
+
+            - Hours: `${{ env.HOURS }}`
+            - Max posts: `${{ env.MAX_POSTS }}`
+            - Dry run: `${{ env.DRY }}`
+            - Publish now: `${{ env.PUBLISH_NOW }}`
+            - TZ: `${{ env.TZ }}`
+            - Debug: `${{ env.DEBUG }}`
