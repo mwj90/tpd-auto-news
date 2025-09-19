@@ -143,14 +143,16 @@ def write_draft(title, url, published_dt, body, author="Automated", base_path=DR
         "source": url,
     }
 
-    # Front matter + body
+    # Build front matter safely (no f-string backslash issues)
     lines = ["---"]
     for k, v in fm.items():
-        lines.append(f"{k}: \"{str(v).replace('\"','\\\"')}\"")
+        val = str(v).replace('"', '\\"')  # escape quotes first
+        lines.append(f'{k}: "{val}"')
     lines.append("---")
     lines.append("")
     lines.append(body.strip())
     lines.append("")
+
     path.write_text("\n".join(lines), encoding="utf-8")
     return path
 
