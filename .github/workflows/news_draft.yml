@@ -3,10 +3,6 @@ name: Draft Automated Posts
 on:
   workflow_dispatch:
 
-permissions:
-  contents: write
-  pull-requests: write
-
 jobs:
   draft:
     runs-on: ubuntu-latest
@@ -15,7 +11,7 @@ jobs:
       HOURS: "6"
       MAX_POSTS: "3"
       DRY: "false"
-      TZ: Etc/GMT-4
+      TZ: "Etc/GMT-4"
       INOREADER_JSON_URL: ${{ vars.INOREADER_JSON_URL }}
 
     steps:
@@ -38,9 +34,11 @@ jobs:
           import nltk
           for pkg in ("punkt","punkt_tab","stopwords"):
               try:
-                  nltk.data.find({"punkt":"tokenizers/punkt",
-                                  "punkt_tab":"tokenizers/punkt_tab/english",
-                                  "stopwords":"corpora/stopwords"}[pkg])
+                  nltk.data.find({
+                      "punkt": "tokenizers/punkt",
+                      "punkt_tab": "tokenizers/punkt_tab/english",
+                      "stopwords": "corpora/stopwords"
+                  }[pkg])
               except LookupError:
                   nltk.download(pkg, quiet=True)
           print("NLTK data ready.")
@@ -48,18 +46,3 @@ jobs:
 
       - name: Generate draft posts
         run: python scripts/auto_news.py
-
-      - name: Create PR if changes
-        uses: peter-evans/create-pull-request@v6
-        with:
-          commit-message: chore: add automated news drafts
-          title: Automated drafts – ${{ github.run_id }}
-          body: |
-            Hours: 6
-            Max posts: 3
-            Dry run: false
-          branch: bot/auto-drafts
-          delete-branch: true
-          add-paths: |
-            drafts/**
-            state/seen.json
