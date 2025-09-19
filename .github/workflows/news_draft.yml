@@ -80,15 +80,15 @@ jobs:
           PY
 
       - name: Generate draft posts
-        shell: bash
         run: |
           set -e
-          echo "Generating drafts for last ${HOURS}h (max ${MAX_POSTS})"
-          if [[ "${DRY}" == "true" ]]; then
-            python scripts/auto_news.py --hours "${HOURS}" --max-posts "${MAX_POSTS}" --dry-run
-          else
-            python scripts/auto_news.py --hours "${HOURS}" --max-posts "${MAX_POSTS}"
-          fi
+          echo "Generating drafts (max $MAX_POSTS)…"
+          python scripts/auto_news.py
+        env:
+          INOREADER_JSON_URL: "https://www.inoreader.com/stream/user/1006265339/tag/Google%20News%20Feeds/view/json?n=1000"
+          MAX_POSTS: "3"
+          DRY: "false"
+          DEBUG: "true"
 
       - name: Create PR if changes
         uses: peter-evans/create-pull-request@v6
