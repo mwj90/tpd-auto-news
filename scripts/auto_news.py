@@ -9,6 +9,7 @@ from dateutil.parser import parse as dtparse
 
 PUBLISH_NOW = os.getenv("PUBLISH_NOW", "false").lower() == "true"
 OUTPUT_DIR = "_posts/automated-news" if PUBLISH_NOW else "drafts"
+os.makedirs(OUTPUT_DIR, exist_ok=True)   # <— add this once near the top
 
 # -------------------------------------------------------------------
 # Config
