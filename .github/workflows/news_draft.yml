@@ -16,11 +16,17 @@ jobs:
       MAX_POSTS: "3"
       DRY: "false"
       TZ: Etc/GMT-4
-      INOREADER_JSON_URL: "https://www.inoreader.com/stream/user/1006265339/tag/Google%20News%20Feeds/view/json?n=1000"  # <— add this
+      # EITHER keep the inline URL:
+      INOREADER_JSON_URL: "https://www.inoreader.com/stream/user/1006265339/tag/Google%20News%20Feeds/view/json?n=1000"
+      # OR (recommended) use a repo variable/secret and comment out the line above:
+      # INOREADER_JSON_URL: ${{ vars.INOREADER_JSON_URL || secrets.INOREADER_JSON_URL }}
 
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
@@ -29,20 +35,22 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Download NLTK data
+      - name: Ensure NLTK data
         run: |
           python - <<'PY'
           import nltk
-          for pkg in ["punkt","punkt_tab","stopwords"]:
-              try: nltk.data.find({"punkt":"tokenizers/punkt","punkt_tab":"tokenizers/punkt_tab/english","stopwords":"corpora/stopwords"}[pkg])
-              except LookupError: nltk.download(pkg, quiet=True)
+          for pkg in ("punkt","punkt_tab","stopwords"):
+              try:
+                  nltk.data.find({"punkt":"tokenizers/punkt",
+                                  "punkt_tab":"tokenizers/punkt_tab/english",
+                                  "stopwords":"corpora/stopwords"}[pkg])
+              except LookupError:
+                  nltk.download(pkg, quiet=True)
           print("NLTK data ready.")
           PY
 
       - name: Generate draft posts
-        run: |
-          echo "Generating drafts…"
-          python scripts/auto_news.py
+        run: python scripts/auto_news.py
 
       - name: Create PR if changes
         uses: peter-evans/create-pull-request@v6
@@ -50,7 +58,9 @@ jobs:
           commit-message: chore: add automated news drafts
           title: Automated drafts – ${{ github.run_id }}
           body: |
-            New drafts from Inoreader.
+            Hours: 6
+            Max posts: 3
+            Dry run: false
           branch: bot/auto-drafts
           delete-branch: true
           add-paths: |
