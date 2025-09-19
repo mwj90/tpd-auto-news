@@ -7,6 +7,9 @@ from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 from dateutil.parser import parse as dtparse
 
+PUBLISH_NOW = os.getenv("PUBLISH_NOW", "false").lower() == "true"
+OUTPUT_DIR = "_posts/automated-news" if PUBLISH_NOW else "drafts"
+
 # -------------------------------------------------------------------
 # Config
 # -------------------------------------------------------------------
@@ -16,7 +19,7 @@ MAX_POSTS = int(os.getenv("MAX_POSTS", "3"))
 PUBLISH_NOW = os.getenv("PUBLISH_NOW", "false").lower() == "true"
 LOCAL_TZ = ZoneInfo("Asia/Dubai")  # GMT+4
 
-OUTPUT_DIR = "_posts" if PUBLISH_NOW else "drafts"
+OUTPUT_DIR = "_posts/automated-news" if PUBLISH_NOW else "drafts"
 
 # -------------------------------------------------------------------
 # Helpers
