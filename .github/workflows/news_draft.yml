@@ -12,7 +12,7 @@ jobs:
       MAX_POSTS: "3"
       DRY: "false"
       TZ: "Etc/GMT-4"
-       INOREADER_JSON_URL: "https://www.inoreader.com/stream/user/1006265339/tag/Google%20News%20Feeds/view/json?n=1000"
+      INOREADER_JSON_URL: "https://www.inoreader.com/stream/user/1006265339/tag/Google%20News%20Feeds/view/json?n=1000"
 
     steps:
       - name: Checkout
