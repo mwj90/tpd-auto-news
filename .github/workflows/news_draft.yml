@@ -4,81 +4,57 @@ on:
   workflow_dispatch:
     inputs:
       hours:
-        description: "How many past hours to consider"
-        required: false
+        description: "Look back this many hours"
         default: "6"
       max_posts:
-        description: "Maximum number of drafts to create"
-        required: false
+        description: "Max posts to generate"
         default: "3"
-      dry_run:
-        description: "Run without creating drafts (log only)"
-        required: false
+      publish_now:
+        description: "Publish directly to site (true/false)"
         default: "false"
-        type: choice
-        options: ["false", "true"]
-
-permissions:
-  contents: write          # needed to push a branch
-  pull-requests: write     # needed to open/update the PR
-
-env:
-  PYTHONUNBUFFERED: "1"
-  HOURS: 6
-  MAX_POSTS: 3
-  DRY: "false"
-  TZ: Etc/GMT-4
-
 
 jobs:
   draft:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    env:
+      PYTHONUNBUFFERED: 1
+      HOURS: ${{ inputs.hours || '6' }}
+      MAX_POSTS: ${{ inputs.max_posts || '3' }}
+      DRY: "false"
+      TZ: Etc/GMT-4               # you said GMT+4
+      PUBLISH_NOW: ${{ inputs.publish_now || 'false' }}
+      INOREADER_JSON_URL: "https://www.inoreader.com/stream/user/1006265339/tag/Google%20News%20Feeds/view/json?n=1000"
+      DEBUG: "true"
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Python 3.11
-        uses: actions/setup-python@v5
+      - name: Sanity
+        run: |
+          set -e
+          test -f config.yaml              || { echo "Missing config.yaml" && exit 1; }
+          test -f scripts/auto_news.py     || { echo "Missing scripts/auto_news.py" && exit 1; }
+          mkdir -p state drafts _posts/automated-news
+          [[ -f state/seen.json ]] || echo "[]" > state/seen.json
+
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      - name: Sanity
-        shell: bash
-        run: |
-          set -e
-          # Verify expected files exist
-          test -f config.yaml              || { echo "Missing config.yaml" && exit 1; }
-          test -f scripts/auto_news.py     || { echo "Missing scripts/auto_news.py" && exit 1; }
-
-          # Prepare folders/files used by the script
-          mkdir -p state drafts
-          [[ -f state/seen.json ]] || echo "[]" > state/seen.json
-
-          # Export inputs as env for later steps
-          echo "HOURS=${{ github.event.inputs.hours || '6' }}"       >> $GITHUB_ENV
-          echo "MAX_POSTS=${{ github.event.inputs.max_posts || '3' }}" >> $GITHUB_ENV
-          echo "DRY=${{ github.event.inputs.dry_run || 'false' }}"     >> $GITHUB_ENV
-
       - name: Install deps
-        shell: bash
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Download NLTK data
-        shell: bash
+      - name: Download NLTK data (quiet)
         run: |
           python - <<'PY'
           import nltk
-          # Ensure required packages are present (quiet, non-interactive)
-          for pkg in ["punkt", "punkt_tab", "stopwords"]:
+          for pkg in ["punkt","punkt_tab","stopwords"]:
               try:
-                  nltk.data.find(
-                      {"punkt":"tokenizers/punkt",
-                       "punkt_tab":"tokenizers/punkt_tab/english",
-                       "stopwords":"corpora/stopwords"}[pkg]
-                  )
+                  nltk.data.find({"punkt":"tokenizers/punkt",
+                                   "punkt_tab":"tokenizers/punkt_tab/english",
+                                   "stopwords":"corpora/stopwords"}[pkg])
               except LookupError:
                   nltk.download(pkg, quiet=True)
           print("NLTK data ready.")
@@ -89,24 +65,21 @@ jobs:
           set -e
           echo "Generating drafts (max $MAX_POSTS)…"
           python scripts/auto_news.py
-        env:
-          INOREADER_JSON_URL: "https://www.inoreader.com/stream/user/1006265339/tag/Google%20News%20Feeds/view/json?n=1000"
-          MAX_POSTS: "3"
-          DRY: "false"
-          DEBUG: "true"
 
+      # IMPORTANT: include _posts/** as well, so publish mode is captured
       - name: Create PR if changes
         uses: peter-evans/create-pull-request@v6
         with:
-          commit-message: "chore: add automated news drafts"
-          title: "Automated drafts – $(date -u +'%Y-%m-%d %H:%M UTC')"
+          commit-message: chore: add automated news drafts
+          title: Automated drafts – $(date -u +'%Y-%m-%d %H:%M UTC')
           body: |
-            This PR contains newly generated draft posts and updated state.
+            This PR contains newly generated posts and updated state.
             - Hours: `${{ env.HOURS }}`
             - Max posts: `${{ env.MAX_POSTS }}`
-            - Dry run: `${{ env.DRY }}`
+            - Publish now: `${{ env.PUBLISH_NOW }}`
           branch: bot/auto-drafts
           delete-branch: true
           add-paths: |
             drafts/**
+            _posts/**
             state/seen.json
