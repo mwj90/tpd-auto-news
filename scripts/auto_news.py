@@ -1,42 +1,38 @@
 #!/usr/bin/env python3
-import argparse
-import json
 import os
+import json
 import re
-import sys
-import time
 from pathlib import Path
-from datetime import datetime, timezone, timedelta
-
+from datetime import datetime, timezone
 import requests
-import yaml
-from dateutil import parser as dtparse
+from bs4 import BeautifulSoup
 
-# Optional but present in your env
-import nltk
-from nltk.tokenize import sent_tokenize
-
-try:
-    import trafilatura
-except Exception:
-    trafilatura = None
-
-
+# -------- CONFIG (env or defaults) ----------
 ROOT = Path(__file__).resolve().parents[1]  # repo root
-CFG_FILE = ROOT / "config.yaml"
-SEEN_FILE = ROOT / "state" / "seen.json"
-DRAFTS_DIR = ROOT / "drafts"
+DRAFTS_DIR = ROOT / "drafts"                 # where we drop drafts
+STATE_DIR = ROOT / "state"
+STATE_DIR.mkdir(parents=True, exist_ok=True)
+SEEN_FILE = STATE_DIR / "seen.json"
 
+# Required: your Inoreader JSON URL
+FEED_URL = os.getenv(
+    "INOREADER_JSON_URL",
+    "https://www.inoreader.com/stream/user/1006265339/tag/Google%20News%20Feeds/view/json?n=1000"
+)
 
-def log(msg, *, debug=False, force=False):
-    if force or debug:
-        print(msg, flush=True)
+# How many drafts to create per run
+MAX_POSTS = int(os.getenv("MAX_POSTS", "3"))
 
+# If true, only log and do not write files
+DRY = os.getenv("DRY", "false").lower() == "true"
 
-def load_cfg():
-    with open(CFG_FILE, "r", encoding="utf-8") as f:
-        return yaml.safe_load(f)
+DEBUG = os.getenv("DEBUG", "true").lower() == "true"
 
+# -------------------------------------------
+
+def log(*args):
+    if DEBUG:
+        print(*args)
 
 def load_seen():
     if SEEN_FILE.exists():
@@ -46,94 +42,64 @@ def load_seen():
             return set()
     return set()
 
-
-def save_seen(seen):
-    SEEN_FILE.write_text(json.dumps(sorted(seen)), encoding="utf-8")
-
+def save_seen(seen_set):
+    try:
+        SEEN_FILE.write_text(json.dumps(sorted(list(seen_set)), ensure_ascii=False, indent=2), encoding="utf-8")
+    except Exception as e:
+        log("WARN: could not save seen.json:", e)
 
 def slugify(s: str) -> str:
     s = s.lower()
-    s = re.sub(r"[^\w\s-]+", "", s)
-    s = re.sub(r"\s+", "-", s).strip("-")
+    s = re.sub(r"[^\w\s-]", "", s, flags=re.UNICODE)
+    s = re.sub(r"[\s_-]+", "-", s).strip("-")
     return s[:80] or "post"
 
-
-def fetch_inoreader_items(url: str, debug=False):
-    headers = {"User-Agent": "tpd-auto-news/1.0"}
-    r = requests.get(url, headers=headers, timeout=30)
-    r.raise_for_status()
-    data = r.json()
-    items = data.get("items", [])
-    log(f"DEBUG: items fetched = {len(items)}", debug=debug)
-    return items
-
-
-def pick_id(item):
-    # Prefer stable ID; fall back to URL
-    return item.get("id") or item.get("url") or item.get("origin_id") or item.get("title")
-
-
-def pick_url(item):
-    return item.get("url") or item.get("homepage_url") or item.get("origin_id")
-
-
-def pick_title(item):
-    return (item.get("title") or "").strip()
-
-
-def pick_when(item):
-    # Inoreader JSON uses ISO8601 in "date_published"
-    ts = item.get("date_published") or item.get("published")
-    if not ts:
-        return None
-    try:
-        return dtparse.parse(ts)
-    except Exception:
-        return None
-
-
-def extract_text(url, html_fallback=None, debug=False):
-    text = None
-    if trafilatura:
-        try:
-            downloaded = trafilatura.fetch_url(url, timeout=20)
-            if downloaded:
-                text = trafilatura.extract(downloaded, include_comments=False, include_tables=False)
-        except Exception as e:
-            log(f"DEBUG: trafilatura failed: {e}", debug=debug)
-    if not text and html_fallback:
-        # Make a very light fallback from content_html: strip tags crudely
-        text = re.sub(r"<[^>]+>", " ", html_fallback)
-        text = re.sub(r"\s+", " ", text).strip()
+def html_to_text(html: str) -> str:
+    soup = BeautifulSoup(html, "lxml")
+    # remove script/style
+    for tag in soup(["script", "style", "noscript"]):
+        tag.decompose()
+    text = soup.get_text("\n", strip=True)
+    # compact blank lines a bit
+    text = re.sub(r"\n{3,}", "\n\n", text)
     return text
 
+def pick_url(entry: dict) -> str:
+    """
+    Inoreader JSON sometimes has:
+      - "url" OR
+      - "origin_id" OR
+      - "link" OR inside "origin/htmlUrl"
+    We try common options.
+    """
+    for key in ("url", "origin_id", "link"):
+        if key in entry and entry[key]:
+            return entry[key]
+    # try nested
+    origin = entry.get("origin") or {}
+    if isinstance(origin, dict) and origin.get("htmlUrl"):
+        return origin["htmlUrl"]
+    return ""
 
-def summarize_to_target(text, target_words=300):
-    # Very naive: first N sentences to hit ~target words
-    if not text:
-        return ""
-    sentences = sent_tokenize(text)
-    out = []
-    count = 0
-    for s in sentences:
-        w = len(s.split())
-        if count + w > target_words and out:
-            break
-        out.append(s)
-        count += w
-        if count >= target_words:
-            break
-    # If extremely short, just return the text up to ~target
-    if not out:
-        return " ".join(text.split()[:target_words])
-    return " ".join(out)
+def parse_published(entry: dict) -> datetime:
+    """
+    Inoreader JSON example field:
+      "date_published": "2025-09-19T17:32:08+00:00"
+    """
+    raw = entry.get("date_published") or entry.get("published") or ""
+    try:
+        # Python 3.11 handles fromisoformat with offset
+        dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        return dt
+    except Exception:
+        return datetime.now(timezone.utc)
 
-
-def write_draft(title, url, published_dt, body, author="Automated", base_path=DRAFTS_DIR):
+def write_draft(title, url, published_dt, body, author="Automated"):
+    DRAFTS_DIR.mkdir(parents=True, exist_ok=True)
     date_str = published_dt.astimezone(timezone.utc).strftime("%Y-%m-%d")
     slug = slugify(title) or slugify(url)
     filename = f"{date_str}-{slug}.md"
-    path = base_path / filename
+    path = DRAFTS_DIR / filename
 
     fm = {
         "layout": "post",
@@ -143,115 +109,77 @@ def write_draft(title, url, published_dt, body, author="Automated", base_path=DR
         "source": url,
     }
 
-    # Build front matter safely (no f-string backslash issues)
     lines = ["---"]
+    # escape double quotes safely
     for k, v in fm.items():
-        val = str(v).replace('"', '\\"')  # escape quotes first
+        val = str(v).replace('"', '\\"')
         lines.append(f'{k}: "{val}"')
     lines.append("---")
     lines.append("")
     lines.append(body.strip())
     lines.append("")
 
+    if DRY:
+        log(f"[DRY] Would write: {path.name}")
+        return path
+
     path.write_text("\n".join(lines), encoding="utf-8")
+    log("Wrote draft:", path)
     return path
 
-
 def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--hours", type=int, default=6)
-    ap.add_argument("--max-posts", type=int, default=3)
-    ap.add_argument("--dry-run", action="store_true")
-    ap.add_argument("--debug", action="store_true")
-    args = ap.parse_args()
-
-    cfg = load_cfg()
-    feed_url = cfg.get("inoreader_json_url")
-    if not feed_url:
-        print("ERROR: `inoreader_json_url` missing in config.yaml", file=sys.stderr)
-        sys.exit(1)
-
-    author = cfg.get("author", "Automated News")
-    window = timedelta(hours=args.hours)
-    now = datetime.now(timezone.utc)
-
-    DRAFTS_DIR.mkdir(parents=True, exist_ok=True)
-    SEEN_FILE.parent.mkdir(parents=True, exist_ok=True)
-
+    print(f"Fetching: {FEED_URL}")
     seen = load_seen()
-    items = fetch_inoreader_items(feed_url, debug=args.debug)
 
-    kept = []
-    for idx, it in enumerate(items, 1):
-        iid = pick_id(it)
-        title = pick_title(it)
-        url = pick_url(it)
-        published = pick_when(it)
-        if args.debug:
-            log(f"DEBUG[{idx}]: title={title!r}", debug=True)
-            log(f"DEBUG[{idx}]: id={iid}", debug=True)
-            log(f"DEBUG[{idx}]: url={url}", debug=True)
-            log(f"DEBUG[{idx}]: published={published}", debug=True)
+    try:
+        r = requests.get(FEED_URL, timeout=30)
+        r.raise_for_status()
+        data = r.json()
+    except Exception as e:
+        print("ERROR: could not fetch/parse feed JSON:", e)
+        return
 
-        if not iid or not title or not url or not published:
-            log(f"DROP: missing essentials (id/title/url/date)", debug=args.debug)
-            continue
+    items = data.get("items") or data.get("entries") or []
+    print("Items in feed:", len(items))
 
-        # Freshness
-        if now - published > window:
-            if args.debug:
-                age = now - published
-                log(f"DROP: too old ({age})", debug=True)
-            continue
+    created = 0
+    new_seen = set(seen)
 
-        # Seen?
-        if iid in seen:
-            log("DROP: already seen", debug=args.debug)
-            continue
-
-        kept.append(it)
-
-        if len(kept) >= args.max_posts:
+    for entry in items:
+        if created >= MAX_POSTS:
             break
 
-    print(f"Candidates kept: {len(kept)}")
-    created = []
+        title = (entry.get("title") or "").strip()
+        url = pick_url(entry)
+        body_html = entry.get("content_html") or entry.get("summary") or entry.get("content") or ""
+        published_dt = parse_published(entry)
 
-    for it in kept:
-        iid = pick_id(it)
-        url = pick_url(it)
-        title = pick_title(it)
-        published = pick_when(it)
-        html_fallback = it.get("content_html")
+        # a stable ID to dedupe: prefer entry's 'id', else url
+        entry_id = entry.get("id") or url or title
+        if not entry_id:
+            log("SKIP: entry has no usable id or url")
+            continue
 
-        article_text = extract_text(url, html_fallback=html_fallback, debug=args.debug)
-        if not article_text or len(article_text.split()) < 120:
-            # Use title + minimal stub if extraction is bad
-            article_text = f"{title}\n\n(Quick note) Source: {url}"
+        if entry_id in seen:
+            log("SKIP (seen):", title)
+            continue
 
-        body = summarize_to_target(article_text, target_words=320)
+        # Build a simple body: title + source + extracted text from content_html
+        text = html_to_text(body_html) if body_html else ""
+        if not text:
+            text = f"(No body available. Source: {url})"
 
-        if args.dry_run:
-            print(f"[DRY] Would write: {title} -> {url}")
-        else:
-            path = write_draft(title, url, published, body, author=author)
-            created.append(str(path.relative_to(ROOT)))
-            seen.add(iid)
+        body = f"{text}\n\n—\n*Source:* {url}"
 
-    if not args.dry_run and created:
-        save_seen(seen)
+        try:
+            write_draft(title or "Untitled", url, published_dt, body)
+            created += 1
+            new_seen.add(entry_id)
+        except Exception as e:
+            log("WARN: failed to write draft for:", title, e)
 
-    # Emit summary for workflow logs
     print(json.dumps({"created": created}, indent=2))
-
+    save_seen(new_seen)
 
 if __name__ == "__main__":
-    # Ensure punkt is present (the workflow downloads it, but this is a guard)
-    try:
-        nltk.data.find("tokenizers/punkt")
-    except LookupError:
-        try:
-            nltk.download("punkt", quiet=True)
-        except Exception:
-            pass
     main()
