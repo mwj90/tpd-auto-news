@@ -21,6 +21,7 @@ permissions:
   contents: write
   pull-requests: write
 
+
 jobs:
   draft:
     runs-on: ubuntu-latest
@@ -29,6 +30,9 @@ jobs:
       MAX_POSTS: ${{ inputs.max_posts }}
       DRY: ${{ inputs.dry_run }}
     steps:
+       - name: Download NLTK data
+        run: |
+          python -m nltk.downloader punkt punkt_tab stopwords
       - name: Checkout
         uses: actions/checkout@v4
 
